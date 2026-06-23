@@ -1,0 +1,10 @@
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.cuda
+    environment:
+      FRONTEND_ORIGIN: http://localhost:5173
+      TORCH_DEVICE: cuda
+    gpus: all
+

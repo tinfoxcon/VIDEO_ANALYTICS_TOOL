@@ -1,0 +1,26 @@
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sva-api
+    environment:
+      FRONTEND_ORIGIN: http://localhost:5173
+      TORCH_DEVICE: auto
+    volumes:
+      - ./backend/data:/app/data
+    ports:
+      - "8000:8000"
+
+  ui:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sva-ui
+    environment:
+      VITE_API_BASE: http://localhost:8000
+    depends_on:
+      - api
+    ports:
+      - "5173:5173"
+

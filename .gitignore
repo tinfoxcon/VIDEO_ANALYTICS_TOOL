@@ -1,0 +1,12 @@
+node_modules/
+dist/
+__pycache__/
+*.pyc
+.DS_Store
+.env
+backend/data/inputs/*.mp4
+backend/data/inputs/mvtd-23-boat-frames/
+backend/data/outputs/**
+!backend/data/outputs/.gitkeep
+backend/data/cvat/**
+!backend/data/cvat/.gitkeep
