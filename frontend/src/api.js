@@ -1,4 +1,5 @@
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
+// const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_BASE ?? "https://video-analytics-tool-jrn9.onrender.com";
 
 async function fetchJson(path, options) {
   const response = await fetch(`${API_BASE}${path}`, options);
