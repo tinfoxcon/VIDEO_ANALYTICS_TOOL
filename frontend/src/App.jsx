@@ -166,8 +166,9 @@ function App() {
           const filtered = currentRuns.filter((item) => item.run_id !== updated.run_id);
           return [updated, ...filtered];
         });
+        setStatusMessage(buildRunStatusMessage(updated));
       } catch (error) {
-        setStatusMessage("Polling paused because the backend could not be reached.");
+        setStatusMessage("Temporary issue reaching the backend. Retrying analysis status polling...");
       }
     }, 1500);
 
