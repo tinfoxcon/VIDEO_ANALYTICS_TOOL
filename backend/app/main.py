@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from .config import settings
 from .schemas import AnalysisRequest, DemoSource, RunRecord, UploadedMedia
 from .services.cvat_export import export_run_to_cvat
-from .services.demo_sources import build_demo_source_list
+from .services.demo_sources import build_demo_source_list, prepare_demo_source
 from .services.orchestrator import AnalysisOrchestrator
 from .services.run_store import RunStore
 from .services.uploads import store_uploaded_media
@@ -41,6 +41,16 @@ def list_demo_sources() -> list[DemoSource]:
     return build_demo_source_list(settings)
 
 
+@app.post("/api/demo/sources/{source_id}/prepare", response_model=DemoSource)
+def download_demo_source(source_id: str) -> DemoSource:
+    try:
+        return prepare_demo_source(settings, source_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (OSError, RuntimeError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
 @app.post("/api/uploads/media", response_model=UploadedMedia)
 def upload_media(file: UploadFile = File(...)) -> UploadedMedia:
     return store_uploaded_media(settings=settings, upload=file)
@@ -61,7 +71,10 @@ def get_run(run_id: str) -> RunRecord:
 
 @app.post("/api/analysis/runs", response_model=RunRecord)
 def create_run(request: AnalysisRequest, background_tasks: BackgroundTasks) -> RunRecord:
-    record = orchestrator.queue_run(request)
+    try:
+        record = orchestrator.queue_run(request)
+    except (FileNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     background_tasks.add_task(orchestrator.execute_run, record.run_id, request)
     return record
 

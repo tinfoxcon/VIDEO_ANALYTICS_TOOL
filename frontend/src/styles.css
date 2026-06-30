@@ -308,6 +308,12 @@ input {
   overflow-wrap: anywhere;
 }
 
+.demo-source-actions {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
 .inline-link {
   width: fit-content;
   border: 0;
@@ -315,6 +321,11 @@ input {
   background: transparent;
   color: var(--seafoam);
   cursor: pointer;
+}
+
+.inline-link:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .slider-grid {

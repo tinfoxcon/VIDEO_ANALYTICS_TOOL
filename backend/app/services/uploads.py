@@ -44,7 +44,7 @@ def store_uploaded_media(settings: Settings, upload: UploadFile) -> UploadedMedi
         return UploadedMedia(
             title=_titleize(Path(filename).stem),
             original_filename=filename,
-            source_path=str(original_path),
+            source_path=f"/media/uploads/{original_path.name}",
             media_kind="video",
         )
 
@@ -53,7 +53,7 @@ def store_uploaded_media(settings: Settings, upload: UploadFile) -> UploadedMedi
     return UploadedMedia(
         title=_titleize(Path(filename).stem),
         original_filename=filename,
-        source_path=str(normalized_video_path),
+        source_path=f"/media/uploads/{normalized_video_path.name}",
         media_kind="image",
         converted_to_video=True,
         note=(

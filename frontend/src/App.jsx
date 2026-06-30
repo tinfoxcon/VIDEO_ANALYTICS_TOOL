@@ -8,6 +8,7 @@ import {
   getRun,
   getRuns,
   getTimeline,
+  prepareDemoSource,
   uploadMedia,
 } from "./api";
 import { mockRun, mockSources, mockTimeline } from "./mockData";
@@ -44,13 +45,16 @@ function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isPreparingSource, setIsPreparingSource] = useState(false);
 
   const selectedRun =
     runs.find((candidate) => candidate.run_id === selectedRunId) ??
     runs[0] ??
     (connectionMode === "demo" ? mockRun : null);
   const selectedSource =
-    sources.find((candidate) => candidate.id === selectedSourceId) ?? sources[0] ?? mockSources[0];
+    sources.find((candidate) => candidate.id === selectedSourceId) ??
+    sources[0] ??
+    (connectionMode === "demo" ? mockSources[0] : null);
   const summary = selectedRun?.summary ?? (connectionMode === "demo" ? mockRun.summary : null);
   const alerts =
     selectedRun?.alerts?.length > 0 ? selectedRun.alerts : connectionMode === "demo" ? mockRun.alerts : [];
@@ -72,16 +76,26 @@ function App() {
           license_name: uploadedSource?.converted_to_video ? "Local upload · converted to MP4" : "Local upload",
           note: "",
         }
-      : {
-          ...selectedSource,
-          note: selectedSource?.exists_locally
-            ? ""
-            : "This demo source is listed in the UI but is not stored on the backend yet. Upload a local file or switch to a downloaded clip before starting analysis.",
-        };
+      : selectedSource
+        ? {
+            ...selectedSource,
+            note: selectedSource.exists_locally
+              ? ""
+              : "This demo source is not on the backend yet. Download it below or start analysis to fetch it automatically.",
+          }
+        : {
+            title: "Demo Source",
+            description: "Choose a demo source to prepare or analyze.",
+            source_page: "",
+            exists_locally: false,
+            license_name: "Demo media",
+            note: "",
+          };
   const canStartAnalysis =
     connectionMode === "live" &&
     !isSubmitting &&
-    (inputMode === "upload" ? Boolean(uploadedSource?.source_path) : Boolean(selectedSource?.exists_locally));
+    !isPreparingSource &&
+    (inputMode === "upload" ? Boolean(uploadedSource?.source_path) : Boolean(selectedSource?.id));
 
   useEffect(() => {
     async function bootstrap() {
@@ -191,6 +205,45 @@ function App() {
     }));
   }
 
+  async function ensureDemoSourceAvailable() {
+    if (!selectedSource?.id) {
+      throw new Error("Choose a demo source before starting analysis.");
+    }
+    if (selectedSource.exists_locally) {
+      return selectedSource;
+    }
+
+    setIsPreparingSource(true);
+    try {
+      const prepared = await prepareDemoSource(selectedSource.id);
+      setSources((currentSources) => {
+        const hasSource = currentSources.some((source) => source.id === prepared.id);
+        if (!hasSource) {
+          return [...currentSources, prepared];
+        }
+        return currentSources.map((source) => (source.id === prepared.id ? prepared : source));
+      });
+      return prepared;
+    } finally {
+      setIsPreparingSource(false);
+    }
+  }
+
+  async function handlePrepareDemoSource() {
+    if (!selectedSource?.id) {
+      setStatusMessage("Choose a demo source before downloading it.");
+      return;
+    }
+
+    setStatusMessage(`Preparing ${selectedSource.title} on the backend...`);
+    try {
+      const prepared = await ensureDemoSourceAvailable();
+      setStatusMessage(`${prepared.title} is ready for analysis.`);
+    } catch (error) {
+      setStatusMessage(`Unable to prepare demo source: ${error.message}`);
+    }
+  }
+
   async function handleUploadSelection(event) {
     const file = event.target.files?.[0];
     if (!file) {
@@ -213,12 +266,6 @@ function App() {
   }
 
   async function handleRunStart() {
-    if (inputMode === "demo" && !selectedSource?.exists_locally) {
-      setStatusMessage(
-        "The selected demo clip is not available on the backend. Upload a local file or switch to a downloaded source first.",
-      );
-      return;
-    }
     if (inputMode === "upload" && !uploadedSource?.source_path) {
       setStatusMessage("Upload a local video or image before starting analysis.");
       return;
@@ -227,9 +274,24 @@ function App() {
     setIsSubmitting(true);
     setStatusMessage("Submitting analysis run...");
     try {
+      let sourceId = selectedSourceId;
+      let sourcePath;
+      if (inputMode === "demo") {
+        if (!selectedSource?.id) {
+          throw new Error("Choose a demo source before starting analysis.");
+        }
+        if (!selectedSource.exists_locally) {
+          setStatusMessage(`Preparing ${selectedSource.title} on the backend...`);
+          await ensureDemoSourceAvailable();
+        }
+      } else {
+        sourceId = `upload-${Date.now()}`;
+        sourcePath = uploadedSource.source_path;
+      }
+
       const record = await createRun({
-        source_id: inputMode === "upload" ? `upload-${Date.now()}` : selectedSourceId,
-        source_path: inputMode === "upload" ? uploadedSource.source_path : undefined,
+        source_id: sourceId,
+        source_path: sourcePath,
         output_label: `operator-${Date.now()}`,
         controls,
       });
@@ -331,9 +393,19 @@ function App() {
                 </select>
               </label>
               {!selectedSource?.exists_locally ? (
-                <p className="field-note field-warning">
-                  This demo clip is listed in the UI but is not stored on the backend yet.
-                </p>
+                <div className="demo-source-actions">
+                  <p className="field-note field-warning">
+                    This demo clip is not stored on the backend yet.
+                  </p>
+                  <button
+                    type="button"
+                    className="inline-link"
+                    onClick={handlePrepareDemoSource}
+                    disabled={connectionMode !== "live" || isPreparingSource || isSubmitting}
+                  >
+                    {isPreparingSource ? "Preparing demo source..." : "Download selected demo clip"}
+                  </button>
+                </div>
               ) : null}
             </>
           ) : (
@@ -476,7 +548,7 @@ function App() {
               onClick={handleRunStart}
               disabled={!canStartAnalysis}
             >
-              {isSubmitting ? "Queueing..." : "Start Analysis"}
+              {isPreparingSource ? "Preparing Demo..." : isSubmitting ? "Queueing..." : "Start Analysis"}
             </button>
             <button
               className="secondary-button"

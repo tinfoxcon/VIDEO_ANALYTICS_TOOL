@@ -16,6 +16,11 @@ class AnalysisOrchestrator:
         self.store = store
 
     def queue_run(self, request: AnalysisRequest) -> RunRecord:
+        resolve_source_path(
+            settings=self.settings,
+            source_id=request.source_id,
+            explicit_path=request.source_path,
+        )
         run_id = f"run-{uuid4().hex[:10]}"
         return self.store.create(run_id=run_id, request=request)
 
@@ -70,4 +75,3 @@ class AnalysisOrchestrator:
             failed.error = str(exc)
             failed.updated_at = datetime.now(UTC)
             return self.store.save(failed)
-

@@ -3,8 +3,14 @@ services:
     name: smart-video-analytics-api
     runtime: python
     rootDir: backend
+    disk:
+      name: app-data
+      mountPath: /opt/data
+      sizeGB: 5
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.11
+      - key: APP_DATA_DIR
+        value: /opt/data
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT

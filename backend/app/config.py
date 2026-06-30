@@ -23,6 +23,7 @@ class Settings:
     api_port: int = field(default_factory=lambda: int(os.getenv("API_PORT", "8000")))
     frontend_origin: str = field(default_factory=lambda: os.getenv("FRONTEND_ORIGIN", "http://localhost:5173"))
     default_device: str = field(default_factory=lambda: os.getenv("TORCH_DEVICE", "auto"))
+    data_root: str | None = field(default_factory=lambda: os.getenv("APP_DATA_DIR"))
 
     @property
     def backend_dir(self) -> Path:
@@ -30,6 +31,8 @@ class Settings:
 
     @property
     def data_dir(self) -> Path:
+        if self.data_root:
+            return Path(self.data_root).expanduser()
         return self.backend_dir / "data"
 
     @property

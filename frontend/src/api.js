@@ -8,7 +8,14 @@ const API_BASE = import.meta.env.VITE_API_BASE ?? defaultApiBase;
 async function fetchJson(path, options) {
   const response = await fetch(`${API_BASE}${path}`, options);
   if (!response.ok) {
-    const message = await response.text();
+    const rawMessage = await response.text();
+    let message = rawMessage;
+    try {
+      const parsed = JSON.parse(rawMessage);
+      message = parsed.detail ?? parsed.message ?? rawMessage;
+    } catch (error) {
+      message = rawMessage;
+    }
     throw new Error(message || `Request failed: ${response.status}`);
   }
   return response.json();
@@ -22,6 +29,12 @@ export async function getHealth() {
 
 export async function getDemoSources() {
   return fetchJson("/api/demo/sources");
+}
+
+export async function prepareDemoSource(sourceId) {
+  return fetchJson(`/api/demo/sources/${sourceId}/prepare`, {
+    method: "POST",
+  });
 }
 
 export async function getRuns() {
