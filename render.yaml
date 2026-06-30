@@ -3,5 +3,8 @@ services:
     name: smart-video-analytics-api
     runtime: python
     rootDir: backend
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
