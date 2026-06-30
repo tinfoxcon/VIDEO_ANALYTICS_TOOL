@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   API_BASE,
   createRun,
@@ -46,6 +46,7 @@ function App() {
   const [isUploading, setIsUploading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isPreparingSource, setIsPreparingSource] = useState(false);
+  const pollFailureCountRef = useRef(0);
 
   const selectedRun =
     runs.find((candidate) => candidate.run_id === selectedRunId) ??
@@ -176,13 +177,17 @@ function App() {
     const interval = window.setInterval(async () => {
       try {
         const updated = await getRun(selectedRunId);
+        pollFailureCountRef.current = 0;
         setRuns((currentRuns) => {
           const filtered = currentRuns.filter((item) => item.run_id !== updated.run_id);
           return [updated, ...filtered];
         });
         setStatusMessage(buildRunStatusMessage(updated));
       } catch (error) {
-        setStatusMessage("Temporary issue reaching the backend. Retrying analysis status polling...");
+        pollFailureCountRef.current += 1;
+        if (pollFailureCountRef.current >= 2) {
+          setStatusMessage("Temporary issue reaching the backend. Retrying analysis status polling...");
+        }
       }
     }, 1500);
 

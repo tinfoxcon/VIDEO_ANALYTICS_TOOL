@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -70,12 +70,12 @@ def get_run(run_id: str) -> RunRecord:
 
 
 @app.post("/api/analysis/runs", response_model=RunRecord)
-def create_run(request: AnalysisRequest, background_tasks: BackgroundTasks) -> RunRecord:
+def create_run(request: AnalysisRequest) -> RunRecord:
     try:
         record = orchestrator.queue_run(request)
     except (FileNotFoundError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    background_tasks.add_task(orchestrator.execute_run, record.run_id, request)
+    orchestrator.start_run(record.run_id, request)
     return record
 
 

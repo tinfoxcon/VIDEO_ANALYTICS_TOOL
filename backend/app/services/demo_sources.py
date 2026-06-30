@@ -24,10 +24,13 @@ def prepare_demo_source(settings: Settings, source_id: str) -> DemoSource:
     source = _find_demo_source(settings, source_id)
     source.local_path.parent.mkdir(parents=True, exist_ok=True)
     if not source.local_path.exists():
-        if source.id == "mvtd-23-boat":
-            _build_mvtd_demo_video(settings, source.local_path)
-        else:
-            _download_direct_video(source.download_url, source.local_path, referer=source.source_page)
+        try:
+            if source.id == "mvtd-23-boat":
+                _build_mvtd_demo_video(settings, source.local_path)
+            else:
+                _download_direct_video(source.download_url, source.local_path, referer=source.source_page)
+        except (OSError, RuntimeError):
+            _build_synthetic_demo_video(source.local_path, source.title)
     return _serialize_demo_source(source)
 
 
@@ -151,6 +154,117 @@ def _build_mvtd_demo_video(settings: Settings, output_video: Path) -> None:
         writer.release()
 
     temp_output.replace(output_video)
+
+
+def _build_synthetic_demo_video(output_video: Path, title: str) -> None:
+    modules = _load_cv_modules()
+    cv2 = modules["cv2"]
+    np = modules["numpy"]
+
+    width = 1280
+    height = 720
+    frame_rate = 12.0
+    frame_count = 180
+    temp_output = output_video.with_suffix(".tmp.mp4")
+    writer = cv2.VideoWriter(
+        str(temp_output),
+        cv2.VideoWriter_fourcc(*"mp4v"),
+        frame_rate,
+        (width, height),
+    )
+    if not writer.isOpened():
+        raise RuntimeError(f"Unable to open video writer for {output_video}")
+
+    try:
+        for frame_index in range(frame_count):
+            frame = np.zeros((height, width, 3), dtype=np.uint8)
+            _paint_synthetic_scene(frame, frame_index, cv2, np)
+            cv2.putText(
+                frame,
+                f"{title} demo",
+                (28, 44),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1.0,
+                (244, 246, 248),
+                2,
+                cv2.LINE_AA,
+            )
+            cv2.putText(
+                frame,
+                "Synthetic fallback clip prepared locally",
+                (28, 82),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (218, 229, 235),
+                2,
+                cv2.LINE_AA,
+            )
+            writer.write(frame)
+    finally:
+        writer.release()
+
+    temp_output.replace(output_video)
+
+
+def _paint_synthetic_scene(frame: object, frame_index: int, cv2: object, np: object) -> None:
+    height, width = frame.shape[:2]
+    horizon = int(height * 0.42)
+    frame[:horizon] = (186, 160, 112)
+    frame[horizon:] = (132, 88, 34)
+
+    for stripe_index in range(9):
+        y = horizon + 14 + stripe_index * 28
+        offset = int(((frame_index * 6) + stripe_index * 37) % 90)
+        cv2.line(frame, (offset - 80, y), (width, y + 12), (156, 109, 48), 2, cv2.LINE_AA)
+
+    primary_x = (frame_index * 8) % (width + 220) - 220
+    secondary_x = width - ((frame_index * 5) % (width + 180))
+    tertiary_x = (frame_index * 3) % (width + 140) - 140
+    _draw_boat(frame, primary_x, int(height * 0.60), 1.05, cv2, np)
+    _draw_boat(frame, secondary_x, int(height * 0.70), 0.82, cv2, np)
+    _draw_boat(frame, tertiary_x, int(height * 0.78), 0.62, cv2, np)
+
+
+def _draw_boat(frame: object, x: int, y: int, scale: float, cv2: object, np: object) -> None:
+    hull_width = max(72, int(118 * scale))
+    hull_height = max(18, int(28 * scale))
+    cabin_width = max(24, int(42 * scale))
+    cabin_height = max(18, int(24 * scale))
+
+    hull = [
+        (x, y),
+        (x + hull_width, y),
+        (x + hull_width - int(18 * scale), y + hull_height),
+        (x + int(14 * scale), y + hull_height),
+    ]
+    cv2.fillPoly(frame, [np.array(hull, dtype="int32")], (236, 236, 238))
+    cv2.rectangle(
+        frame,
+        (x + int(22 * scale), y - cabin_height),
+        (x + int(22 * scale) + cabin_width, y),
+        (247, 247, 249),
+        -1,
+    )
+    cv2.line(
+        frame,
+        (x + int(12 * scale), y + hull_height + 6),
+        (x - int(22 * scale), y + hull_height + 6),
+        (216, 224, 230),
+        max(2, int(3 * scale)),
+        cv2.LINE_AA,
+    )
+
+
+def _load_cv_modules() -> dict[str, object]:
+    try:
+        return {
+            "cv2": importlib.import_module("cv2"),
+            "numpy": importlib.import_module("numpy"),
+        }
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "OpenCV and NumPy are required to prepare demo videos on the backend."
+        ) from exc
 
 
 def _download_file(

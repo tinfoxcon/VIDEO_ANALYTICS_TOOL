@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -23,6 +24,15 @@ class AnalysisOrchestrator:
         )
         run_id = f"run-{uuid4().hex[:10]}"
         return self.store.create(run_id=run_id, request=request)
+
+    def start_run(self, run_id: str, request: AnalysisRequest) -> None:
+        worker = threading.Thread(
+            target=self.execute_run,
+            args=(run_id, request),
+            daemon=True,
+            name=f"analysis-{run_id}",
+        )
+        worker.start()
 
     def execute_run(self, run_id: str, request: AnalysisRequest) -> RunRecord:
         record = self.store.load(run_id)
