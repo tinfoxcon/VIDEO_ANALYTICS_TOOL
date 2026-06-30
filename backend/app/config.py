@@ -41,6 +41,10 @@ class Settings:
         return self.data_dir / "outputs"
 
     @property
+    def upload_dir(self) -> Path:
+        return self.data_dir / "uploads"
+
+    @property
     def cvat_dir(self) -> Path:
         return self.data_dir / "cvat"
 

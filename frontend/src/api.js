@@ -1,5 +1,9 @@
-// const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
-const API_BASE = import.meta.env.VITE_API_BASE ?? "https://video-analytics-tool-jrn9.onrender.com";
+const defaultApiBase =
+  typeof window !== "undefined" && !["localhost", "127.0.0.1"].includes(window.location.hostname)
+    ? window.location.origin
+    : "http://localhost:8000";
+
+const API_BASE = import.meta.env.VITE_API_BASE ?? defaultApiBase;
 
 async function fetchJson(path, options) {
   const response = await fetch(`${API_BASE}${path}`, options);
@@ -38,6 +42,15 @@ export async function createRun(payload) {
   });
 }
 
+export async function uploadMedia(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return fetchJson("/api/uploads/media", {
+    method: "POST",
+    body: formData,
+  });
+}
+
 export async function exportCvat(runId) {
   return fetchJson(`/api/analysis/runs/${runId}/export-cvat`, {
     method: "POST",
@@ -51,4 +64,3 @@ export async function getTimeline(path) {
   }
   return response.json();
 }
-

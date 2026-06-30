@@ -226,16 +226,95 @@ input {
 }
 
 .field select,
-.field input[type="range"] {
+.field input[type="range"],
+.field input[type="file"] {
   width: 100%;
 }
 
-.field select {
+.field select,
+.field input[type="file"] {
   padding: 12px 14px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   color: var(--text);
   background: rgba(255, 255, 255, 0.04);
+}
+
+.field input[type="file"]::file-selector-button {
+  margin-right: 12px;
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(111, 223, 200, 0.18);
+  color: var(--seafoam);
+  cursor: pointer;
+}
+
+.field-note {
+  margin: -4px 0 16px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.field-warning {
+  color: var(--gold);
+}
+
+.mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.mode-button {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
+}
+
+.mode-button-active {
+  border-color: rgba(111, 223, 200, 0.35);
+  background: rgba(111, 223, 200, 0.12);
+  color: var(--text);
+}
+
+.upload-card,
+.upload-summary,
+.empty-card {
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.upload-card {
+  margin-bottom: 16px;
+}
+
+.upload-summary {
+  display: grid;
+  gap: 6px;
+}
+
+.upload-summary strong,
+.run-strip strong,
+.track-row strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.inline-link {
+  width: fit-content;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--seafoam);
+  cursor: pointer;
 }
 
 .slider-grid {
@@ -338,6 +417,11 @@ input {
   line-height: 1.6;
 }
 
+.source-note {
+  margin: 0;
+  color: var(--gold);
+}
+
 .source-meta {
   display: flex;
   flex-wrap: wrap;
@@ -410,7 +494,7 @@ input {
 
 .run-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -429,7 +513,7 @@ input {
 
 .track-row {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 12px;
 }
 
@@ -479,6 +563,11 @@ input {
   padding: 18px;
   border-radius: 20px;
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+}
+
+.empty-card {
+  color: var(--muted);
+  line-height: 1.6;
 }
 
 .workflow-card ol {

@@ -8,6 +8,7 @@ import {
   getRun,
   getRuns,
   getTimeline,
+  uploadMedia,
 } from "./api";
 import { mockRun, mockSources, mockTimeline } from "./mockData";
 
@@ -38,16 +39,49 @@ function App() {
   const [timeline, setTimeline] = useState([]);
   const [connectionMode, setConnectionMode] = useState("loading");
   const [statusMessage, setStatusMessage] = useState("Connecting to analysis backend...");
+  const [inputMode, setInputMode] = useState("demo");
+  const [uploadedSource, setUploadedSource] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
   const selectedRun =
-    runs.find((candidate) => candidate.run_id === selectedRunId) ?? runs[0] ?? mockRun;
+    runs.find((candidate) => candidate.run_id === selectedRunId) ??
+    runs[0] ??
+    (connectionMode === "demo" ? mockRun : null);
   const selectedSource =
     sources.find((candidate) => candidate.id === selectedSourceId) ?? sources[0] ?? mockSources[0];
-  const summary = selectedRun?.summary ?? mockRun.summary;
-  const alerts = selectedRun?.alerts?.length ? selectedRun.alerts : mockRun.alerts;
-  const tracks = selectedRun?.latest_tracks?.length ? selectedRun.latest_tracks : mockRun.latest_tracks;
+  const summary = selectedRun?.summary ?? (connectionMode === "demo" ? mockRun.summary : null);
+  const alerts =
+    selectedRun?.alerts?.length > 0 ? selectedRun.alerts : connectionMode === "demo" ? mockRun.alerts : [];
+  const tracks =
+    selectedRun?.latest_tracks?.length > 0
+      ? selectedRun.latest_tracks
+      : connectionMode === "demo"
+        ? mockRun.latest_tracks
+        : [];
+  const inputSource =
+    inputMode === "upload"
+      ? {
+          title: uploadedSource?.title ?? "Local Upload",
+          description: uploadedSource
+            ? `Uploaded ${formatMediaKind(uploadedSource.media_kind)} from your system for direct analysis.`
+            : "Upload a local video or still image to run the pipeline without relying on a preloaded demo.",
+          source_page: "",
+          exists_locally: Boolean(uploadedSource?.source_path),
+          license_name: uploadedSource?.converted_to_video ? "Local upload · converted to MP4" : "Local upload",
+          note: uploadedSource?.note ?? "",
+        }
+      : {
+          ...selectedSource,
+          note: selectedSource?.exists_locally
+            ? ""
+            : "This demo source is listed in the UI but is not stored on the backend yet. Upload a local file or switch to a downloaded clip before starting analysis.",
+        };
+  const canStartAnalysis =
+    connectionMode === "live" &&
+    !isSubmitting &&
+    (inputMode === "upload" ? Boolean(uploadedSource?.source_path) : Boolean(selectedSource?.exists_locally));
 
   useEffect(() => {
     async function bootstrap() {
@@ -73,6 +107,23 @@ function App() {
 
     bootstrap();
   }, []);
+
+  useEffect(() => {
+    if (connectionMode !== "live") {
+      return;
+    }
+    if (!selectedRun) {
+      setStatusMessage("Backend connected. Choose a downloaded clip or upload local media to begin.");
+      return;
+    }
+    setStatusMessage(buildRunStatusMessage(selectedRun));
+  }, [
+    connectionMode,
+    selectedRun?.error,
+    selectedRun?.progress,
+    selectedRun?.run_id,
+    selectedRun?.status,
+  ]);
 
   useEffect(() => {
     if (!selectedRun?.artifacts?.timeline_json) {
@@ -139,12 +190,45 @@ function App() {
     }));
   }
 
+  async function handleUploadSelection(event) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setIsUploading(true);
+    setStatusMessage(`Uploading ${file.name}...`);
+    try {
+      const payload = await uploadMedia(file);
+      setUploadedSource(payload);
+      setInputMode("upload");
+      setStatusMessage(payload.note ?? `${payload.original_filename} uploaded. Ready to start analysis.`);
+    } catch (error) {
+      setStatusMessage(`Unable to upload media: ${error.message}`);
+    } finally {
+      setIsUploading(false);
+      event.target.value = "";
+    }
+  }
+
   async function handleRunStart() {
+    if (inputMode === "demo" && !selectedSource?.exists_locally) {
+      setStatusMessage(
+        "The selected demo clip is not available on the backend. Upload a local file or switch to a downloaded source first.",
+      );
+      return;
+    }
+    if (inputMode === "upload" && !uploadedSource?.source_path) {
+      setStatusMessage("Upload a local video or image before starting analysis.");
+      return;
+    }
+
     setIsSubmitting(true);
     setStatusMessage("Submitting analysis run...");
     try {
       const record = await createRun({
-        source_id: selectedSourceId,
+        source_id: inputMode === "upload" ? `upload-${Date.now()}` : selectedSourceId,
+        source_path: inputMode === "upload" ? uploadedSource.source_path : undefined,
         output_label: `operator-${Date.now()}`,
         controls,
       });
@@ -200,10 +284,10 @@ function App() {
       </header>
 
       <section className="metrics-grid">
-        <MetricCard label="Frames Processed" value={summary?.frames_processed ?? "764"} />
-        <MetricCard label="Processed FPS" value={summary?.processed_fps ?? "11.2"} accent="seafoam" />
-        <MetricCard label="Unique Tracks" value={summary?.unique_tracks ?? "5"} accent="gold" />
-        <MetricCard label="Active Alerts" value={summary?.active_alerts ?? "2"} accent="alert" />
+        <MetricCard label="Frames Processed" value={summary?.frames_processed ?? "--"} />
+        <MetricCard label="Processed FPS" value={summary?.processed_fps ?? "--"} accent="seafoam" />
+        <MetricCard label="Unique Tracks" value={summary?.unique_tracks ?? "--"} accent="gold" />
+        <MetricCard label="Active Alerts" value={summary?.active_alerts ?? "--"} accent="alert" />
       </section>
 
       <main className="workspace-grid">
@@ -213,19 +297,72 @@ function App() {
             subtitle="Thresholds, disturbance simulation, and noise suppression."
           />
 
-          <label className="field">
-            <span>Demo Source</span>
-            <select
-              value={selectedSourceId}
-              onChange={(event) => setSelectedSourceId(event.target.value)}
+          <div className="mode-switch" role="tablist" aria-label="Input mode">
+            <button
+              className={`mode-button ${inputMode === "demo" ? "mode-button-active" : ""}`}
+              type="button"
+              onClick={() => setInputMode("demo")}
             >
-              {sources.map((source) => (
-                <option key={source.id} value={source.id}>
-                  {source.title}
-                </option>
-              ))}
-            </select>
-          </label>
+              Demo Source
+            </button>
+            <button
+              className={`mode-button ${inputMode === "upload" ? "mode-button-active" : ""}`}
+              type="button"
+              onClick={() => setInputMode("upload")}
+            >
+              Upload File
+            </button>
+          </div>
+
+          {inputMode === "demo" ? (
+            <>
+              <label className="field">
+                <span>Demo Source</span>
+                <select
+                  value={selectedSourceId}
+                  onChange={(event) => setSelectedSourceId(event.target.value)}
+                >
+                  {sources.map((source) => (
+                    <option key={source.id} value={source.id}>
+                      {source.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {!selectedSource?.exists_locally ? (
+                <p className="field-note field-warning">
+                  This demo clip is listed in the UI but is not stored on the backend yet.
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <div className="upload-card">
+              <label className="field">
+                <span>Local Video or Image</span>
+                <input
+                  type="file"
+                  accept="video/*,image/*"
+                  onChange={handleUploadSelection}
+                  disabled={connectionMode !== "live" || isUploading}
+                />
+              </label>
+              <p className="field-note">
+                Upload MP4, MOV, WEBM, JPG, PNG, WEBP, or similar media from your system.
+              </p>
+              {uploadedSource ? (
+                <div className="upload-summary">
+                  <strong>{uploadedSource.original_filename}</strong>
+                  <span>
+                    {formatMediaKind(uploadedSource.media_kind)}
+                    {uploadedSource.converted_to_video ? " · converted to MP4 for analysis" : ""}
+                  </span>
+                  <button type="button" className="inline-link" onClick={() => setUploadedSource(null)}>
+                    Remove upload
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          )}
 
           <div className="slider-grid">
             <RangeField
@@ -333,7 +470,7 @@ function App() {
               className="primary-button"
               type="button"
               onClick={handleRunStart}
-              disabled={connectionMode !== "live" || isSubmitting}
+              disabled={!canStartAnalysis}
             >
               {isSubmitting ? "Queueing..." : "Start Analysis"}
             </button>
@@ -355,15 +492,18 @@ function App() {
           />
 
           <div className="source-card">
-            <h3>{selectedSource?.title}</h3>
-            <p>{selectedSource?.description}</p>
+            <h3>{inputSource.title}</h3>
+            <p>{inputSource.description}</p>
             <div className="source-meta">
-              <span>{selectedSource?.license_name}</span>
-              <span>{selectedSource?.exists_locally ? "downloaded locally" : "requires download"}</span>
+              <span>{inputSource.license_name}</span>
+              <span>{inputSource.exists_locally ? "ready for analysis" : "requires download"}</span>
             </div>
-            <a href={selectedSource?.source_page} target="_blank" rel="noreferrer">
-              View source page
-            </a>
+            {inputSource.note ? <p className="source-note">{inputSource.note}</p> : null}
+            {inputSource.source_page ? (
+              <a href={inputSource.source_page} target="_blank" rel="noreferrer">
+                View source page
+              </a>
+            ) : null}
           </div>
 
           <div className="video-stage">
@@ -376,10 +516,11 @@ function App() {
               />
             ) : (
               <div className="video-placeholder">
-                <p>No processed video is available yet.</p>
+                <p>{selectedRun?.status === "failed" ? "The last analysis run failed." : "No processed video is available yet."}</p>
                 <span>
-                  Once the FastAPI backend runs an analysis job, the annotated comparison video will
-                  appear here.
+                  {selectedRun?.status === "failed"
+                    ? selectedRun?.error ?? "Check the selected input, runtime dependencies, and backend logs."
+                    : "Once the FastAPI backend runs an analysis job, the annotated comparison video will appear here."}
                 </span>
               </div>
             )}
@@ -411,39 +552,45 @@ function App() {
             </div>
             <div>
               <span className="mini-label">Status</span>
-              <strong>{selectedRun?.status ?? "demo"}</strong>
+              <strong>{selectedRun?.status ?? "idle"}</strong>
             </div>
             <div>
               <span className="mini-label">Progress</span>
-              <strong>{Math.round((selectedRun?.progress ?? 1) * 100)}%</strong>
+              <strong>{Math.round((selectedRun?.progress ?? 0) * 100)}%</strong>
             </div>
             <div>
               <span className="mini-label">Device</span>
-              <strong>{summary?.device ?? "cpu"}</strong>
+              <strong>{summary?.device ?? "--"}</strong>
             </div>
           </div>
 
           <div className="track-table">
-            {tracks.map((track) => (
-              <div key={track.track_id} className="track-row">
-                <div>
-                  <span className="mini-label">Track</span>
-                  <strong>T{track.track_id}</strong>
+            {tracks.length > 0 ? (
+              tracks.map((track) => (
+                <div key={track.track_id} className="track-row">
+                  <div>
+                    <span className="mini-label">Track</span>
+                    <strong>T{track.track_id}</strong>
+                  </div>
+                  <div>
+                    <span className="mini-label">Class</span>
+                    <strong>{track.label}</strong>
+                  </div>
+                  <div>
+                    <span className="mini-label">Confidence</span>
+                    <strong>{track.confidence.toFixed(2)}</strong>
+                  </div>
+                  <div>
+                    <span className="mini-label">State</span>
+                    <strong className={`state-${track.alert_state}`}>{track.alert_state}</strong>
+                  </div>
                 </div>
-                <div>
-                  <span className="mini-label">Class</span>
-                  <strong>{track.label}</strong>
-                </div>
-                <div>
-                  <span className="mini-label">Confidence</span>
-                  <strong>{track.confidence.toFixed(2)}</strong>
-                </div>
-                <div>
-                  <span className="mini-label">State</span>
-                  <strong className={`state-${track.alert_state}`}>{track.alert_state}</strong>
-                </div>
+              ))
+            ) : (
+              <div className="empty-card">
+                No track data yet. Run a successful analysis to populate detections, tracks, and alerts.
               </div>
-            ))}
+            )}
           </div>
 
           <div className="alert-stack">
@@ -462,7 +609,7 @@ function App() {
           <div className="workflow-card">
             <h3>Operator Workflow</h3>
             <ol>
-              <li>Select a downloaded maritime clip or fetch a listed demo source.</li>
+              <li>Select a downloaded maritime clip or upload local media.</li>
               <li>Adjust detection threshold and suppression controls based on sea state.</li>
               <li>Run analysis and review split-screen output with track overlays.</li>
               <li>Export sampled frames plus auto-boxes into CVAT for annotation refinement.</li>
@@ -513,6 +660,23 @@ function ToggleField({ label, ...props }) {
       <span>{label}</span>
     </label>
   );
+}
+
+function buildRunStatusMessage(run) {
+  if (run.status === "failed") {
+    return run.error ? `Analysis failed: ${run.error}` : "Analysis failed. Check the selected input and backend logs.";
+  }
+  if (run.status === "completed") {
+    return "Analysis completed. Review the annotated output and export if needed.";
+  }
+  if (run.status === "running") {
+    return `Analysis running. ${Math.round((run.progress ?? 0) * 100)}% complete.`;
+  }
+  return "Analysis queued. Polling for progress updates.";
+}
+
+function formatMediaKind(mediaKind) {
+  return mediaKind === "image" ? "Image upload" : "Video upload";
 }
 
 function resolveMedia(path) {

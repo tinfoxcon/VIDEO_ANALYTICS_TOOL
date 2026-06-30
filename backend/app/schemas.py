@@ -99,3 +99,12 @@ class DemoSource(BaseModel):
     local_path: str
     exists_locally: bool
     license_name: str
+
+
+class UploadedMedia(BaseModel):
+    title: str
+    original_filename: str
+    source_path: str
+    media_kind: Literal["video", "image"]
+    converted_to_video: bool = False
+    note: str | None = None

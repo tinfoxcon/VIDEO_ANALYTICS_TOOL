@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
-from .schemas import AnalysisRequest, DemoSource, RunRecord
+from .schemas import AnalysisRequest, DemoSource, RunRecord, UploadedMedia
 from .services.cvat_export import export_run_to_cvat
 from .services.demo_sources import build_demo_source_list
 from .services.orchestrator import AnalysisOrchestrator
 from .services.run_store import RunStore
+from .services.uploads import store_uploaded_media
 
 
 store = RunStore(settings.runs_dir)
@@ -22,7 +23,7 @@ app = FastAPI(
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_origin, "http://localhost:3000", "http://localhost:4173", "https://video-analytics-tool-9fyw.onrender.com"],
+    allow_origins=[settings.frontend_origin, "http://localhost:3000", "http://localhost:4173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,6 +39,11 @@ def healthcheck() -> dict[str, str]:
 @app.get("/api/demo/sources", response_model=list[DemoSource])
 def list_demo_sources() -> list[DemoSource]:
     return build_demo_source_list(settings)
+
+
+@app.post("/api/uploads/media", response_model=UploadedMedia)
+def upload_media(file: UploadFile = File(...)) -> UploadedMedia:
+    return store_uploaded_media(settings=settings, upload=file)
 
 
 @app.get("/api/analysis/runs", response_model=list[RunRecord])
