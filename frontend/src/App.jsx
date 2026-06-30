@@ -70,7 +70,7 @@ function App() {
           source_page: "",
           exists_locally: Boolean(uploadedSource?.source_path),
           license_name: uploadedSource?.converted_to_video ? "Local upload · converted to MP4" : "Local upload",
-          note: uploadedSource?.note ?? "",
+          note: "",
         }
       : {
           ...selectedSource,
@@ -202,7 +202,7 @@ function App() {
       const payload = await uploadMedia(file);
       setUploadedSource(payload);
       setInputMode("upload");
-      setStatusMessage(payload.note ?? `${payload.original_filename} uploaded. Ready to start analysis.`);
+      setStatusMessage(`${payload.original_filename} uploaded. Ready to start analysis.`);
     } catch (error) {
       setStatusMessage(`Unable to upload media: ${error.message}`);
     } finally {
@@ -356,6 +356,9 @@ function App() {
                     {formatMediaKind(uploadedSource.media_kind)}
                     {uploadedSource.converted_to_video ? " · converted to MP4 for analysis" : ""}
                   </span>
+                  {uploadedSource.note ? (
+                    <p className="field-note field-warning">{uploadedSource.note}</p>
+                  ) : null}
                   <button type="button" className="inline-link" onClick={() => setUploadedSource(null)}>
                     Remove upload
                   </button>
